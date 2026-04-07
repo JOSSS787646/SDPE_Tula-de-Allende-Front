@@ -23,10 +23,8 @@ type ForgotStep = "request" | "validate" | "change";
 type PermissionGroupDto = {
   Module?: string;
   Action?: string[] | string;
-
   module?: string;
   action?: string[] | string;
-
   [key: string]: unknown;
 };
 
@@ -63,7 +61,9 @@ function buildAllowedModules(perms: PermissionGroupDto[]): string[] {
   return perms
     .filter((p) => {
       const actionsRaw = p.Action ?? p.action;
-      const actions = normalizeActions(actionsRaw).map((a) => a.trim().toUpperCase());
+      const actions = normalizeActions(actionsRaw).map((a) =>
+        a.trim().toUpperCase()
+      );
       return actions.includes("VIEW");
     })
     .map((p) => String(p.Module ?? p.module ?? "").trim())
@@ -81,7 +81,6 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
-  // Forgot fields
   const [code, setCode] = useState<string>("");
   const [newPassword, setNewPassword] = useState<string>("");
   const [confirmNewPassword, setConfirmNewPassword] = useState<string>("");
@@ -101,14 +100,22 @@ const Login: React.FC = () => {
     setToastOpen(true);
   }, []);
 
-  // Evita redirect si estás en forgot (para probar bien el flujo)
   useEffect(() => {
-    if (isAuthenticated && mode === "login") navigate("/home", { replace: true });
+    if (!isAuthenticated || mode !== "login") return;
+
+    const storedModules = JSON.parse(
+      localStorage.getItem("allowedModules") || "[]"
+    ) as string[];
+
+    const nextRoute = storedModules.length > 0 ? "/home" : "/sin-acceso";
+    navigate(nextRoute, { replace: true });
   }, [isAuthenticated, navigate, mode]);
 
   useEffect(() => {
     return () => {
-      if (navTimeoutRef.current) window.clearTimeout(navTimeoutRef.current);
+      if (navTimeoutRef.current !== null) {
+        window.clearTimeout(navTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -126,22 +133,22 @@ const Login: React.FC = () => {
       const perms = getPermissions(data);
       const allowedModules = buildAllowedModules(perms);
 
-      // Debug opcional (puedes quitarlo luego)
-      // console.log("PERMISSIONS:", perms);
-      // console.log("ALLOWED MODULES:", allowedModules);
-
       localStorage.setItem("auth", JSON.stringify(data));
       localStorage.setItem("userEmail", cleanEmail);
       localStorage.setItem("allowedModules", JSON.stringify(allowedModules));
 
-      // ✅ IMPORTANTÍSIMO: pasar allowedModules al provider
       loginWithToken(token, cleanEmail, allowedModules);
 
       showToast("success", "Sesión iniciada correctamente");
 
-      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+      const nextRoute = allowedModules.length > 0 ? "/home" : "/sin-acceso";
+
+      if (navTimeoutRef.current !== null) {
+        window.clearTimeout(navTimeoutRef.current);
+      }
+
       navTimeoutRef.current = window.setTimeout(() => {
-        navigate("/home", { replace: true });
+        navigate(nextRoute, { replace: true });
       }, 800);
     } catch (error: unknown) {
       console.error("❌ Error en login:", error);
@@ -155,7 +162,6 @@ const Login: React.FC = () => {
     setMode("forgot");
     setForgotStep("request");
 
-    // limpia campos que no necesitas
     setPassword("");
     setShowPassword(false);
 
@@ -175,7 +181,6 @@ const Login: React.FC = () => {
     setShowNewPassword(false);
   };
 
-  // Paso 1: enviar código
   const handleSendReset = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -188,7 +193,10 @@ const Login: React.FC = () => {
     setIsLoading(true);
     try {
       const msg = await recoverPassword({ email: cleanEmail });
-      showToast("success", msg || "Si el correo existe, se enviará un código de recuperación.");
+      showToast(
+        "success",
+        msg || "Si el correo existe, se enviará un código de recuperación."
+      );
       setForgotStep("validate");
     } catch (err: unknown) {
       showToast("error", getErrorMessage(err, "No se pudo enviar el código"));
@@ -197,7 +205,6 @@ const Login: React.FC = () => {
     }
   };
 
-  // Paso 2: validar código
   const handleValidateCode = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -209,7 +216,10 @@ const Login: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const msg = await validateResetCode({ email: cleanEmail, code: cleanCode });
+      const msg = await validateResetCode({
+        email: cleanEmail,
+        code: cleanCode,
+      });
       showToast("success", msg || "Código válido");
       setForgotStep("change");
     } catch (err: unknown) {
@@ -219,7 +229,6 @@ const Login: React.FC = () => {
     }
   };
 
-  // Paso 3: cambiar contraseña
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -231,7 +240,12 @@ const Login: React.FC = () => {
     if (!cleanEmail) return showToast("error", "Escribe tu correo");
     if (!cleanCode) return showToast("error", "Falta el código");
     if (!np) return showToast("error", "Escribe la nueva contraseña");
-    if (np.length < 6) return showToast("error", "La contraseña debe tener al menos 6 caracteres");
+    if (np.length < 6) {
+      return showToast(
+        "error",
+        "La contraseña debe tener al menos 6 caracteres"
+      );
+    }
     if (np !== cp) return showToast("error", "Las contraseñas no coinciden");
 
     setIsLoading(true);
@@ -244,7 +258,6 @@ const Login: React.FC = () => {
 
       showToast("success", msg || "Contraseña actualizada correctamente.");
 
-      // Regresa a login
       setMode("login");
       setForgotStep("request");
 
@@ -253,7 +266,10 @@ const Login: React.FC = () => {
       setConfirmNewPassword("");
       setShowNewPassword(false);
     } catch (err: unknown) {
-      showToast("error", getErrorMessage(err, "No se pudo cambiar la contraseña"));
+      showToast(
+        "error",
+        getErrorMessage(err, "No se pudo cambiar la contraseña")
+      );
     } finally {
       setIsLoading(false);
     }
@@ -262,7 +278,9 @@ const Login: React.FC = () => {
   const isForgot = mode === "forgot";
 
   return (
-    <div className={`${styles.loginContainer} ${isForgot ? styles.isForgot : ""}`}>
+    <div
+      className={`${styles.loginContainer} ${isForgot ? styles.isForgot : ""}`}
+    >
       <Toast
         open={toastOpen}
         type={toastType}
@@ -271,14 +289,12 @@ const Login: React.FC = () => {
         durationMs={3200}
       />
 
-      {/* Panel izquierdo (logo) */}
       <div className={styles.leftPanel}>
         <div className={styles.logoCard}>
           <img src={LogoPresi} alt="Tula de Allende" />
         </div>
       </div>
 
-      {/* Panel derecho (form) */}
       <div className={styles.rightPanel}>
         <div className={styles.formCard}>
           <img src={Icono} alt="Icono" className={styles.formIcon} />
@@ -346,7 +362,11 @@ const Login: React.FC = () => {
                 </button>
               </div>
 
-              <button type="submit" className={styles.loginButton} disabled={isLoading}>
+              <button
+                type="submit"
+                className={styles.loginButton}
+                disabled={isLoading}
+              >
                 {isLoading ? "Cargando..." : "Iniciar sesión"}
               </button>
             </form>
@@ -365,7 +385,11 @@ const Login: React.FC = () => {
                 <span className={styles.icon}>@</span>
               </div>
 
-              <button type="submit" className={styles.loginButton} disabled={isLoading}>
+              <button
+                type="submit"
+                className={styles.loginButton}
+                disabled={isLoading}
+              >
                 {isLoading ? "Enviando..." : "Enviar código"}
               </button>
 
@@ -392,27 +416,33 @@ const Login: React.FC = () => {
                 />
               </div>
 
-              <button type="submit" className={styles.loginButton} disabled={isLoading}>
+              <button
+                type="submit"
+                className={styles.loginButton}
+                disabled={isLoading}
+              >
                 {isLoading ? "Validando..." : "Validar código"}
               </button>
 
-              <button
-                type="button"
-                className={styles.backLink}
-                onClick={() => setForgotStep("request")}
-                disabled={isLoading}
-              >
-                Reenviar código
-              </button>
+              <div className={styles.actionsContainer}>
+                <button
+                  type="button"
+                  className={styles.backLink}
+                  onClick={() => setForgotStep("request")}
+                  disabled={isLoading}
+                >
+                  Reenviar código
+                </button>
 
-              <button
-                type="button"
-                className={styles.backLink}
-                onClick={handleBackToLogin}
-                disabled={isLoading}
-              >
-                Volver a iniciar sesión
-              </button>
+                <button
+                  type="button"
+                  className={styles.backLink}
+                  onClick={handleBackToLogin}
+                  disabled={isLoading}
+                >
+                  Volver a iniciar sesión
+                </button>
+              </div>
             </form>
           ) : (
             <form onSubmit={handleChangePassword}>
@@ -450,7 +480,11 @@ const Login: React.FC = () => {
                 />
               </div>
 
-              <button type="submit" className={styles.loginButton} disabled={isLoading}>
+              <button
+                type="submit"
+                className={styles.loginButton}
+                disabled={isLoading}
+              >
                 {isLoading ? "Guardando..." : "Cambiar contraseña"}
               </button>
 

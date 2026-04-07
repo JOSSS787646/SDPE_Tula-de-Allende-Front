@@ -1,7 +1,5 @@
-// src/services/api.ts
 export const BASE_URL =
-  (import.meta.env.VITE_API_URL as string) || "http://sistemapolizasegresos.somee.com/";
-  
+  (import.meta.env.VITE_API_URL as string) || "";
 
 type AuthStored = { token?: string; Token?: string };
 
